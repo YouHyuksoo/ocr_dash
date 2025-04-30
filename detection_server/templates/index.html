@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Detection Server: 원본 + 분석 영상</title>
+    <style>
+      body {
+        background-color: #111;
+        color: #eee;
+        font-family: sans-serif;
+        text-align: center;
+      }
+      h1 {
+        margin-top: 20px;
+      }
+      .container {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin-top: 30px;
+      }
+      .video-box {
+        border: 2px solid #444;
+        padding: 10px;
+        background: #222;
+      }
+      canvas,
+      img {
+        display: block;
+        width: 640px;
+        height: 480px;
+      }
+      label {
+        font-weight: bold;
+        margin-bottom: 10px;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>📡 실시간 스트리밍 비교</h1>
+
+    <div class="container">
+      <!-- WebSocket 수신 영상 -->
+      <div class="video-box">
+        <label>🧾 수신된 원본 영상 (WebSocket)</label>
+        <canvas id="wsCanvas" width="640" height="480"></canvas>
+      </div>
+
+      <!-- MJPEG 분석 영상 -->
+      <div class="video-box">
+        <label>🧠 분석 결과 영상 (MJPEG)</label>
+        <img id="mjpeg" src="/annotated_feed" />
+      </div>
+    </div>
+
+    <script>
+      const wsCanvas = document.getElementById("wsCanvas");
+      const ctx = wsCanvas.getContext("2d");
+      const wsImage = new Image();
+
+      const ws = new WebSocket("ws://127.0.0.1:8000/ws/video");
+      ws.binaryType = "arraybuffer";
+
+      ws.onmessage = (event) => {
+        const blob = new Blob([event.data], { type: "image/jpeg" });
+        wsImage.onload = () =>
+          ctx.drawImage(wsImage, 0, 0, wsCanvas.width, wsCanvas.height);
+        wsImage.src = URL.createObjectURL(blob);
+      };
+
+      ws.onopen = () => {
+        console.log("✅ WebSocket 연결됨");
+        setInterval(() => ws.send("ping"), 5000);
+      };
+
+      ws.onerror = (e) => console.error("❌ WebSocket 오류", e);
+      ws.onclose = () => console.log("🔴 WebSocket 연결 종료");
+    </script>
+  </body>
+</html>

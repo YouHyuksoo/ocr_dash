@@ -1,46 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Video Server</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        text-align: center;
-        margin: 20px;
-      }
-      #video-feed {
-        border: 1px solid #ccc;
-        width: 640px;
-        height: 480px;
-      }
-      #camera-info {
-        margin-top: 20px;
-        font-size: 1.2em;
-      }
-    </style>
+    <title>WebSocket Video</title>
   </head>
   <body>
-    <h1>Video Server</h1>
-    <img id="video-feed" src="/video_feed" alt="Video Feed" />
-    <div id="camera-info">Camera Info: <span id="info">Loading...</span></div>
-
+    <h1>📡 실시간 영상 스트리밍 (WebSocket)</h1>
+    <canvas id="canvas" width="640" height="480"></canvas>
     <script>
-      async function updateCameraInfo() {
-        try {
-          const response = await fetch("/camera_info");
-          const data = await response.json();
-          document.getElementById(
-            "info"
-          ).textContent = `Index: ${data.index}, Resolution: ${data.resolution}`;
-        } catch (error) {
-          console.error("Failed to fetch camera info:", error);
-        }
-      }
+      const ws = new WebSocket("ws://127.0.0.1:8000/ws/video");
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
 
-      // 카메라 정보는 한 번만 가져옵니다.
-      updateCameraInfo();
+      ws.binaryType = "arraybuffer";
+
+      ws.onmessage = (event) => {
+        const blob = new Blob([event.data], { type: "image/jpeg" });
+        const img = new Image();
+        img.onload = () => ctx.drawImage(img, 0, 0);
+        img.src = URL.createObjectURL(blob);
+      };
+
+      ws.onopen = () => {
+        setInterval(() => ws.send("ping"), 5000); // ping 유지를 위한 전송
+      };
     </script>
   </body>
 </html>
