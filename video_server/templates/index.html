@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Server</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        margin: 20px;
+      }
+      #video-feed {
+        border: 1px solid #ccc;
+        width: 640px;
+        height: 480px;
+      }
+      #camera-info {
+        margin-top: 20px;
+        font-size: 1.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Video Server</h1>
+    <img id="video-feed" src="/video_feed" alt="Video Feed" />
+    <div id="camera-info">Camera Info: <span id="info">Loading...</span></div>
+
+    <script>
+      async function updateCameraInfo() {
+        try {
+          const response = await fetch("/camera_info");
+          const data = await response.json();
+          document.getElementById(
+            "info"
+          ).textContent = `Index: ${data.index}, Resolution: ${data.resolution}`;
+        } catch (error) {
+          console.error("Failed to fetch camera info:", error);
+        }
+      }
+
+      // 카메라 정보는 한 번만 가져옵니다.
+      updateCameraInfo();
+    </script>
+  </body>
+</html>
