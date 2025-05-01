@@ -1,5 +1,5 @@
 import dash
-from dash import html, dcc, Input, Output, State
+from dash import html, dcc, Input, Output, State, ClientsideFunction
 import dash_bootstrap_components as dbc
 from dash_iconify import DashIconify
 
@@ -85,11 +85,52 @@ app.layout = dbc.Container(
                                 html.H5(
                                     "실시간 감지 영상", className="text-center mb-3"
                                 ),
-                                html.Img(
-                                    id="live-feed",
-                                    src="http://127.0.0.1:8010/annotated_feed",
-                                    style={"width": "100%", "border": "1px solid #444"},
-                                    alt="📷 영상 수신 실패 - 서버 확인 필요 http://127.0.0.1:8010/annotated_feed",
+                                # html.Img를 html.Canvas로 변경
+                                html.Div(
+                                    [
+                                        html.Canvas(
+                                            id="live-feed-canvas",
+                                            width=640,
+                                            height=480,
+                                            style={
+                                                "width": "100%",
+                                                "border": "1px solid #444",
+                                                "background": "#000",
+                                            },
+                                        ),
+                                        html.Div(
+                                            [
+                                                html.Span(
+                                                    id="feed-status",
+                                                    className="status",
+                                                    style={
+                                                        "display": "inline-block",
+                                                        "width": "10px",
+                                                        "height": "10px",
+                                                        "borderRadius": "50%",
+                                                        "background": "#666",
+                                                        "marginRight": "5px",
+                                                    },
+                                                ),
+                                                html.Span(
+                                                    "연결 대기 중...",
+                                                    id="feed-status-text",
+                                                ),
+                                                html.Button(
+                                                    "연결",
+                                                    id="btn-connect-feed",
+                                                    className="ms-2",
+                                                ),
+                                                html.Button(
+                                                    "연결 해제",
+                                                    id="btn-disconnect-feed",
+                                                    className="ms-2",
+                                                    disabled=True,
+                                                ),
+                                            ],
+                                            className="d-flex align-items-center justify-content-center mt-2",
+                                        ),
+                                    ]
                                 ),
                             ]
                         )
@@ -129,6 +170,7 @@ app.layout = dbc.Container(
         ),
         dcc.Interval(id="status-interval", interval=2000, n_intervals=0),
         dcc.Store(id="sidebar-toggle", data=True),
+        dcc.Store(id="feed-connection-status", data=False),
     ],
     fluid=True,
     className="py-4",
@@ -162,6 +204,58 @@ def toggle_sidebar(n, is_open):
 )
 def update_status(n):
     return "3", "ABC-1234"
+
+
+# 간소화된 WebSocket 연결 상태 관리를 위한 콜백
+app.clientside_callback(
+    """
+    function(n_connect, n_disconnect, current_status) {
+ ㅍ                  // 초기 로드 시에는 아무 것도 하지 않음
+        if (!n_connect && !n_disconnect) {
+            console.log("초기 로드 - 상태 유지:", current_status);
+            return [current_status, current_status, !current_status];
+        }
+        
+        // 어떤 버튼이 눌렸는지 확인 (가장 최근에 변경된 prop_id)
+        var ctx = window.dash_clientside.callback_context;
+        if (!ctx || !ctx.triggered) {
+            console.log("콜백 컨텍스트 없음 - 상태 유지:", current_status);
+            return [current_status, current_status, !current_status];
+        }
+        
+        var triggered_id = ctx.triggered[0].prop_id.split('.')[0];
+        console.log("트리거된 ID:", triggered_id);
+        
+        if (triggered_id === 'btn-connect-feed') {
+            console.log("연결 버튼 클릭됨");
+            if (typeof window.connectFeed === 'function') {
+                window.connectFeed();
+                return [true, true, false];
+            } else {
+                console.error("connectFeed 함수를 찾을 수 없습니다!");
+                return [current_status, current_status, !current_status];
+            }
+        } else if (triggered_id === 'btn-disconnect-feed') {
+            console.log("연결 해제 버튼 클릭됨");
+            if (typeof window.disconnectFeed === 'function') {
+                window.disconnectFeed();
+                return [false, false, true];
+            } else {
+                console.error("disconnectFeed 함수를 찾을 수 없습니다!");
+                return [current_status, current_status, !current_status];
+            }
+        }
+        
+        return [current_status, current_status, !current_status];
+    }
+    """,
+    Output("feed-connection-status", "data"),
+    Output("btn-disconnect-feed", "disabled"),
+    Output("btn-connect-feed", "disabled"),
+    Input("btn-connect-feed", "n_clicks"),
+    Input("btn-disconnect-feed", "n_clicks"),
+    State("feed-connection-status", "data"),
+)
 
 
 if __name__ == "__main__":

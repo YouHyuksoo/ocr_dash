@@ -6,7 +6,7 @@ async def test_ws():
     try:
         print("🔌 연결 시도 중...")
         async with websockets.connect(
-            "ws://127.0.0.1:8000/ws/video", open_timeout=3
+            "ws://127.0.0.1:8010/ws/annotated", open_timeout=3
         ) as ws:
             print("✅ 연결 성공")
     except Exception as e:

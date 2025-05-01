@@ -37,10 +37,12 @@ def detect_objects(frame, conf_thres=0.5):
     :return: 첫 번째 감지된 객체의 바운딩 박스 (x, y, w, h) 또는 None
     """
     model = get_yolo_model()  # 싱글톤 인스턴스에서 모델 가져오기
+    print("✅ YOLO 모델 객체감지 시작 ")
     results = model.predict(source=frame, conf=conf_thres, verbose=False)
+
     detections = results[0].boxes.xyxy.cpu().numpy()  # (N, 4)
     scores = results[0].boxes.conf.cpu().numpy()
-
+    print("✅ YOLO 모델 객체감지 진행함 ")
     if len(detections) == 0:
         return None
 
