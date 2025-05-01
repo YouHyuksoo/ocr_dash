@@ -2,10 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Detection Server: 원본 + 분석 영상</title>
+    <title>Detection Server UI</title>
     <style>
       body {
-        background-color: #111;
+        background: #111;
         color: #eee;
         font-family: sans-serif;
         text-align: center;
@@ -18,64 +18,93 @@
         justify-content: center;
         gap: 30px;
         margin-top: 30px;
+        flex-wrap: wrap;
       }
       .video-box {
         border: 2px solid #444;
         padding: 10px;
         background: #222;
+        margin-bottom: 20px;
       }
-      canvas,
-      img {
-        display: block;
+      canvas {
         width: 640px;
         height: 480px;
+        background: black;
       }
       label {
-        font-weight: bold;
-        margin-bottom: 10px;
         display: block;
+        margin-bottom: 10px;
+        font-weight: bold;
       }
     </style>
   </head>
   <body>
-    <h1>📡 실시간 스트리밍 비교</h1>
+    <h1>📡 실시간 영상 스트림 비교 (수신 / 분석 / 테스트)</h1>
 
     <div class="container">
-      <!-- WebSocket 수신 영상 -->
+      <!-- 원본 수신 영상 -->
       <div class="video-box">
-        <label>🧾 수신된 원본 영상 (WebSocket)</label>
-        <canvas id="wsCanvas" width="640" height="480"></canvas>
+        <label>🎥 수신 원본 영상 (WebSocket)</label>
+        <canvas id="originalCanvas" width="640" height="480"></canvas>
       </div>
 
-      <!-- MJPEG 분석 영상 -->
+      <!-- 분석된 결과 영상 -->
       <div class="video-box">
-        <label>🧠 분석 결과 영상 (MJPEG)</label>
-        <img id="mjpeg" src="/annotated_feed" />
+        <label>🧠 분석 결과 영상 (WebSocket)</label>
+        <canvas id="annotatedCanvas" width="640" height="480"></canvas>
+      </div>
+
+      <!-- 중계 테스트용 영상 -->
+      <div class="video-box">
+        <label>🔁 수신 후 단순 송출 영상 (Pass-through)</label>
+        <canvas id="passCanvas" width="640" height="480"></canvas>
       </div>
     </div>
 
     <script>
-      const wsCanvas = document.getElementById("wsCanvas");
-      const ctx = wsCanvas.getContext("2d");
-      const wsImage = new Image();
+      // 수신 원본 영상
+      const originalCanvas = document.getElementById("originalCanvas");
+      const originalCtx = originalCanvas.getContext("2d");
+      const originalImg = new Image();
+      const originalWs = new WebSocket("ws://127.0.0.1:8000/ws/video");
+      originalWs.binaryType = "arraybuffer";
 
-      const ws = new WebSocket("ws://127.0.0.1:8000/ws/video");
-      ws.binaryType = "arraybuffer";
-
-      ws.onmessage = (event) => {
+      originalWs.onmessage = (event) => {
         const blob = new Blob([event.data], { type: "image/jpeg" });
-        wsImage.onload = () =>
-          ctx.drawImage(wsImage, 0, 0, wsCanvas.width, wsCanvas.height);
-        wsImage.src = URL.createObjectURL(blob);
+        originalImg.onload = () => originalCtx.drawImage(originalImg, 0, 0);
+        originalImg.src = URL.createObjectURL(blob);
       };
+      originalWs.onopen = () =>
+        setInterval(() => originalWs.send("ping"), 5000);
 
-      ws.onopen = () => {
-        console.log("✅ WebSocket 연결됨");
-        setInterval(() => ws.send("ping"), 5000);
+      // 분석 영상
+      const annotatedCanvas = document.getElementById("annotatedCanvas");
+      const annotatedCtx = annotatedCanvas.getContext("2d");
+      const annotatedImg = new Image();
+      const annotatedWs = new WebSocket("ws://127.0.0.1:8010/ws/annotated");
+      annotatedWs.binaryType = "arraybuffer";
+
+      annotatedWs.onmessage = (event) => {
+        const blob = new Blob([event.data], { type: "image/jpeg" });
+        annotatedImg.onload = () => annotatedCtx.drawImage(annotatedImg, 0, 0);
+        annotatedImg.src = URL.createObjectURL(blob);
       };
+      annotatedWs.onopen = () =>
+        setInterval(() => annotatedWs.send("ping"), 5000);
 
-      ws.onerror = (e) => console.error("❌ WebSocket 오류", e);
-      ws.onclose = () => console.log("🔴 WebSocket 연결 종료");
+      // 중계 테스트 영상 (pass-through)
+      const passCanvas = document.getElementById("passCanvas");
+      const passCtx = passCanvas.getContext("2d");
+      const passImg = new Image();
+      const passWs = new WebSocket("ws://127.0.0.1:8010/ws/pass_through");
+      passWs.binaryType = "arraybuffer";
+
+      passWs.onmessage = (event) => {
+        const blob = new Blob([event.data], { type: "image/jpeg" });
+        passImg.onload = () => passCtx.drawImage(passImg, 0, 0);
+        passImg.src = URL.createObjectURL(blob);
+      };
+      passWs.onopen = () => setInterval(() => passWs.send("ping"), 5000);
     </script>
   </body>
 </html>
