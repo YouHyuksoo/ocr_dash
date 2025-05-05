@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <title>Detection Server UI</title>
@@ -72,251 +72,146 @@
       .disconnected {
         background: #f44336;
       }
+      .fps {
+        font-size: 0.9em;
+        color: #aaa;
+        margin-top: 5px;
+      }
     </style>
   </head>
   <body>
     <h1>📡 실시간 영상 스트림 비교 (수신 / 분석 / 테스트)</h1>
 
-    <div class="container">
-      <!-- 원본 수신 영상 -->
-      <div class="video-box">
-        <label>
-          <span id="originalStatus" class="status"></span>
-          🎥 수신 원본 영상 (WebSocket)
-        </label>
-        <canvas id="originalCanvas" width="640" height="480"></canvas>
-        <div class="controls">
-          <button id="originalConnect">연결</button>
-          <button id="originalDisconnect">연결 해제</button>
-        </div>
-      </div>
-
-      <!-- 분석된 결과 영상 -->
-      <div class="video-box">
-        <label>
-          <span id="annotatedStatus" class="status"></span>
-          🧠 분석 결과 영상 (WebSocket)
-        </label>
-        <canvas id="annotatedCanvas" width="640" height="480"></canvas>
-        <div class="controls">
-          <button id="annotatedConnect">연결</button>
-          <button id="annotatedDisconnect">연결 해제</button>
-        </div>
-      </div>
-
-      <!-- 중계 테스트용 영상 -->
-      <div class="video-box">
-        <label>
-          <span id="passStatus" class="status"></span>
-          🔁 수신 후 단순 송출 영상 (Pass-through)
-        </label>
-        <canvas id="passCanvas" width="640" height="480"></canvas>
-        <div class="controls">
-          <button id="passConnect">연결</button>
-          <button id="passDisconnect">연결 해제</button>
-        </div>
-      </div>
-    </div>
+    <div class="container" id="videoContainer"></div>
 
     <script>
-      // 웹소켓 객체들을 전역 변수로 관리
-      let originalWs = null;
-      let annotatedWs = null;
-      let passWs = null;
+      const videoConfigs = [
+        {
+          label: "🎥 수신 원본 영상 (WebSocket)",
+          canvasId: "originalCanvas",
+          wsUrl: "ws://127.0.0.1:8000/ws/video",
+          statusId: "originalStatus",
+          connectId: "originalConnect",
+          disconnectId: "originalDisconnect",
+          fpsId: "originalFps",
+        },
+        {
+          label: "🧠 분석 결과 영상 (WebSocket)",
+          canvasId: "annotatedCanvas",
+          wsUrl: "ws://127.0.0.1:8010/ws/annotated",
+          statusId: "annotatedStatus",
+          connectId: "annotatedConnect",
+          disconnectId: "annotatedDisconnect",
+          fpsId: "annotatedFps",
+        },
+        {
+          label: "🔁 수신 후 단순 송출 영상 (Pass-through)",
+          canvasId: "passCanvas",
+          wsUrl: "ws://127.0.0.1:8010/ws/pass_through",
+          statusId: "passStatus",
+          connectId: "passConnect",
+          disconnectId: "passDisconnect",
+          fpsId: "passFps",
+        },
+      ];
 
-      // 핑 인터벌 ID들을 저장하기 위한 변수들
-      let originalPingInterval = null;
-      let annotatedPingInterval = null;
-      let passPingInterval = null;
+      const videoContainer = document.getElementById("videoContainer");
 
-      // 원본 영상 요소들
-      const originalCanvas = document.getElementById("originalCanvas");
-      const originalCtx = originalCanvas.getContext("2d");
-      const originalImg = new Image();
-      const originalStatus = document.getElementById("originalStatus");
-      const originalConnectBtn = document.getElementById("originalConnect");
-      const originalDisconnectBtn =
-        document.getElementById("originalDisconnect");
+      videoConfigs.forEach((config) => {
+        const box = document.createElement("div");
+        box.className = "video-box";
+        box.innerHTML = `
+        <label><span id="${config.statusId}" class="status disconnected"></span>${config.label}</label>
+        <canvas id="${config.canvasId}" width="640" height="480"></canvas>
+        <div class="fps" id="${config.fpsId}">FPS: 0</div>
+        <div class="controls">
+          <button id="${config.connectId}">연결</button>
+          <button id="${config.disconnectId}" disabled>연결 해제</button>
+        </div>
+      `;
+        videoContainer.appendChild(box);
+      });
 
-      // 분석 영상 요소들
-      const annotatedCanvas = document.getElementById("annotatedCanvas");
-      const annotatedCtx = annotatedCanvas.getContext("2d");
-      const annotatedImg = new Image();
-      const annotatedStatus = document.getElementById("annotatedStatus");
-      const annotatedConnectBtn = document.getElementById("annotatedConnect");
-      const annotatedDisconnectBtn = document.getElementById(
-        "annotatedDisconnect"
-      );
+      const instances = {};
 
-      // 중계 테스트 영상 요소들
-      const passCanvas = document.getElementById("passCanvas");
-      const passCtx = passCanvas.getContext("2d");
-      const passImg = new Image();
-      const passStatus = document.getElementById("passStatus");
-      const passConnectBtn = document.getElementById("passConnect");
-      const passDisconnectBtn = document.getElementById("passDisconnect");
+      function setupStream(config) {
+        const canvas = document.getElementById(config.canvasId);
+        const ctx = canvas.getContext("2d");
+        const status = document.getElementById(config.statusId);
+        const connectBtn = document.getElementById(config.connectId);
+        const disconnectBtn = document.getElementById(config.disconnectId);
+        const fpsDisplay = document.getElementById(config.fpsId);
+        const img = new Image();
 
-      // 원본 영상 WebSocket 연결 함수
-      function connectOriginal() {
-        if (originalWs) return;
+        let ws = null;
+        let pingInterval = null;
+        let frameCount = 0;
+        let lastTime = performance.now();
 
-        originalWs = new WebSocket("ws://127.0.0.1:8000/ws/video");
-        originalWs.binaryType = "arraybuffer";
-
-        originalWs.onopen = () => {
-          originalStatus.classList.add("connected");
-          originalStatus.classList.remove("disconnected");
-          originalConnectBtn.disabled = true;
-          originalDisconnectBtn.disabled = false;
-          originalPingInterval = setInterval(
-            () => originalWs.send("ping"),
-            5000
-          );
-          console.log("원본 영상 연결됨");
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(img.src);
         };
 
-        originalWs.onclose = () => {
-          clearInterval(originalPingInterval);
-          originalStatus.classList.remove("connected");
-          originalStatus.classList.add("disconnected");
-          originalConnectBtn.disabled = false;
-          originalDisconnectBtn.disabled = true;
-          originalWs = null;
-          console.log("원본 영상 연결 해제됨");
-        };
+        function connect() {
+          if (ws) return;
+          ws = new WebSocket(config.wsUrl);
+          ws.binaryType = "arraybuffer";
 
-        originalWs.onerror = (error) => {
-          console.error("원본 영상 WebSocket 오류:", error);
-        };
+          ws.onopen = () => {
+            status.classList.add("connected");
+            status.classList.remove("disconnected");
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            pingInterval = setInterval(() => ws.send("ping"), 5000);
+            console.log(`${config.label} 연결됨`);
+          };
 
-        originalWs.onmessage = (event) => {
-          const blob = new Blob([event.data], { type: "image/jpeg" });
-          originalImg.onload = () => originalCtx.drawImage(originalImg, 0, 0);
-          originalImg.src = URL.createObjectURL(blob);
-        };
-      }
+          ws.onclose = () => {
+            clearInterval(pingInterval);
+            status.classList.remove("connected");
+            status.classList.add("disconnected");
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            ws = null;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            img.src = "";
+            fpsDisplay.textContent = "FPS: 0";
+            console.log(`${config.label} 연결 해제됨`);
+          };
 
-      // 분석 영상 WebSocket 연결 함수
-      function connectAnnotated() {
-        if (annotatedWs) return;
+          ws.onerror = (err) => {
+            console.error(`${config.label} WebSocket 오류`, err);
+          };
 
-        annotatedWs = new WebSocket("ws://127.0.0.1:8010/ws/annotated");
-        annotatedWs.binaryType = "arraybuffer";
+          ws.onmessage = (event) => {
+            const blob = new Blob([event.data], { type: "image/jpeg" });
+            img.src = URL.createObjectURL(blob);
 
-        annotatedWs.onopen = () => {
-          annotatedStatus.classList.add("connected");
-          annotatedStatus.classList.remove("disconnected");
-          annotatedConnectBtn.disabled = true;
-          annotatedDisconnectBtn.disabled = false;
-          annotatedPingInterval = setInterval(
-            () => annotatedWs.send("ping"),
-            5000
-          );
-          console.log("분석 영상 연결됨");
-        };
+            frameCount++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+              fpsDisplay.textContent = `FPS: ${frameCount}`;
+              frameCount = 0;
+              lastTime = now;
+            }
+          };
 
-        annotatedWs.onclose = () => {
-          clearInterval(annotatedPingInterval);
-          annotatedStatus.classList.remove("connected");
-          annotatedStatus.classList.add("disconnected");
-          annotatedConnectBtn.disabled = false;
-          annotatedDisconnectBtn.disabled = true;
-          annotatedWs = null;
-          console.log("분석 영상 연결 해제됨");
-        };
-
-        annotatedWs.onerror = (error) => {
-          console.error("분석 영상 WebSocket 오류:", error);
-        };
-
-        annotatedWs.onmessage = (event) => {
-          const blob = new Blob([event.data], { type: "image/jpeg" });
-          annotatedImg.onload = () =>
-            annotatedCtx.drawImage(annotatedImg, 0, 0);
-          annotatedImg.src = URL.createObjectURL(blob);
-        };
-      }
-
-      // 중계 테스트 영상 WebSocket 연결 함수
-      function connectPass() {
-        if (passWs) return;
-
-        passWs = new WebSocket("ws://127.0.0.1:8010/ws/pass_through");
-        passWs.binaryType = "arraybuffer";
-
-        passWs.onopen = () => {
-          passStatus.classList.add("connected");
-          passStatus.classList.remove("disconnected");
-          passConnectBtn.disabled = true;
-          passDisconnectBtn.disabled = false;
-          passPingInterval = setInterval(() => passWs.send("ping"), 5000);
-          console.log("중계 테스트 영상 연결됨");
-        };
-
-        passWs.onclose = () => {
-          clearInterval(passPingInterval);
-          passStatus.classList.remove("connected");
-          passStatus.classList.add("disconnected");
-          passConnectBtn.disabled = false;
-          passDisconnectBtn.disabled = true;
-          passWs = null;
-          console.log("중계 테스트 영상 연결 해제됨");
-        };
-
-        passWs.onerror = (error) => {
-          console.error("중계 테스트 영상 WebSocket 오류:", error);
-        };
-
-        passWs.onmessage = (event) => {
-          const blob = new Blob([event.data], { type: "image/jpeg" });
-          passImg.onload = () => passCtx.drawImage(passImg, 0, 0);
-          passImg.src = URL.createObjectURL(blob);
-        };
-      }
-
-      // 연결 해제 함수들
-      function disconnectOriginal() {
-        if (originalWs) {
-          originalWs.close();
+          instances[config.canvasId] = { ws, connect, disconnect };
         }
-      }
 
-      function disconnectAnnotated() {
-        if (annotatedWs) {
-          annotatedWs.close();
+        function disconnect() {
+          if (ws) ws.close();
         }
+
+        connectBtn.addEventListener("click", connect);
+        disconnectBtn.addEventListener("click", disconnect);
       }
 
-      function disconnectPass() {
-        if (passWs) {
-          passWs.close();
-        }
-      }
+      videoConfigs.forEach(setupStream);
 
-      // 이벤트 리스너 등록
-      originalConnectBtn.addEventListener("click", connectOriginal);
-      originalDisconnectBtn.addEventListener("click", disconnectOriginal);
-
-      annotatedConnectBtn.addEventListener("click", connectAnnotated);
-      annotatedDisconnectBtn.addEventListener("click", disconnectAnnotated);
-
-      passConnectBtn.addEventListener("click", connectPass);
-      passDisconnectBtn.addEventListener("click", disconnectPass);
-
-      // 초기 상태 설정
-      originalStatus.classList.add("disconnected");
-      annotatedStatus.classList.add("disconnected");
-      passStatus.classList.add("disconnected");
-
-      originalDisconnectBtn.disabled = true;
-      annotatedDisconnectBtn.disabled = true;
-      passDisconnectBtn.disabled = true;
-
-      // 페이지 로드 시 자동 연결 (원하는 경우 주석 제거)
       window.addEventListener("load", () => {
-        connectOriginal();
-        connectAnnotated();
-        connectPass();
+        Object.values(instances).forEach(({ connect }) => connect());
       });
     </script>
   </body>

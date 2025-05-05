@@ -2,5 +2,6 @@
   "roi": [100, 200, 300, 150],
   "ocr_retry_limit": 3,
   "roi_entry_timeout": 5.0,
-  "detection_grace_period": 2.0
+  "detection_grace_period": 2.0,
+  "yolo_model_path": "runs/detect/ocr_dash/weights/best.pt"
 }

@@ -53,12 +53,51 @@ app.layout = dbc.Container(
                                             outline=True,
                                             className="d-block w-100",
                                         ),
-                                    ]
+                                        html.Hr(className="my-3"),  # 구분선 추가
+                                        html.H6(
+                                            "모델 테스트", className="mb-2"
+                                        ),  # 섹션 제목
+                                        dbc.Select(
+                                            id="model-select",
+                                            options=[
+                                                {
+                                                    "label": "YOLOv8n",
+                                                    "value": "yolov8n",
+                                                },
+                                                {
+                                                    "label": "YOLOv8s",
+                                                    "value": "yolov8s",
+                                                },
+                                                {
+                                                    "label": "YOLOv8m",
+                                                    "value": "yolov8m",
+                                                },
+                                            ],
+                                            value="yolov8n",
+                                            className="mb-2",
+                                        ),
+                                        dbc.Button(
+                                            "🧪 모델 테스트 실행",
+                                            id="btn-test-model",
+                                            color="info",
+                                            outline=True,
+                                            className="d-block w-100 mb-2",
+                                        ),
+                                        dbc.Button(
+                                            "📊 결과 비교",
+                                            id="btn-compare-results",
+                                            color="secondary",
+                                            outline=True,
+                                            className="d-block w-100",
+                                        ),
+                                    ],
+                                    className="p-2",  # 내부 패딩 축소
                                 ),
-                            ]
+                            ],
+                            className="border-0",
                         )
                     ],
-                    width=3,
+                    width=2,  # 3에서 2로 변경 (25% -> 약 16.7%)
                     style={
                         "transition": "all 0.5s ease",
                         "transform": "translateX(0%)",
@@ -135,7 +174,7 @@ app.layout = dbc.Container(
                             ]
                         )
                     ],
-                    width=6,
+                    width=8,  # 7에서 8로 변경하여 중앙 영역 확대
                 ),
                 # 우측 상태 정보
                 dbc.Col(
@@ -161,10 +200,69 @@ app.layout = dbc.Container(
                                         ),
                                     ]
                                 ),
+                            ],
+                            className="mb-3",
+                        ),
+                        # 환경설정 카드 추가
+                        dbc.Card(
+                            [
+                                dbc.CardHeader("환경설정"),
+                                dbc.CardBody(
+                                    [
+                                        html.P("로그 레벨:", className="mb-1"),
+                                        dbc.Select(
+                                            id="log-level",
+                                            options=[
+                                                {"label": "DEBUG", "value": "debug"},
+                                                {"label": "INFO", "value": "info"},
+                                                {
+                                                    "label": "WARNING",
+                                                    "value": "warning",
+                                                },
+                                                {"label": "ERROR", "value": "error"},
+                                            ],
+                                            value="info",
+                                            className="mb-3",
+                                        ),
+                                        html.P("알림 설정:", className="mb-1"),
+                                        dbc.Checklist(
+                                            options=[
+                                                {
+                                                    "label": "오류 알림",
+                                                    "value": "error_alert",
+                                                },
+                                                {
+                                                    "label": "OCR 완료 알림",
+                                                    "value": "ocr_alert",
+                                                },
+                                            ],
+                                            value=["error_alert"],
+                                            id="notification-settings",
+                                            switch=True,
+                                            className="mb-3",
+                                        ),
+                                        html.P("모니터링 간격:", className="mb-1"),
+                                        dbc.Input(
+                                            id="monitoring-interval",
+                                            type="number",
+                                            min=500,
+                                            max=10000,
+                                            step=500,
+                                            value=2000,
+                                            className="mb-3",
+                                        ),
+                                        dbc.Button(
+                                            "💾 설정 저장",
+                                            id="btn-save-settings",
+                                            color="primary",
+                                            className="mt-2 w-100",
+                                        ),
+                                    ]
+                                ),
                             ]
-                        )
+                        ),
                     ],
-                    width=3,
+                    width=2,  # 3에서 2로 변경하여 폭 축소
                 ),
             ]
         ),
@@ -210,7 +308,7 @@ def update_status(n):
 app.clientside_callback(
     """
     function(n_connect, n_disconnect, current_status) {
- ㅍ                  // 초기 로드 시에는 아무 것도 하지 않음
+        // 초기 로드 시에는 아무 것도 하지 않음
         if (!n_connect && !n_disconnect) {
             console.log("초기 로드 - 상태 유지:", current_status);
             return [current_status, current_status, !current_status];

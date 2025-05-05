@@ -45,7 +45,7 @@ async def video_broadcast():
         while True:
             # 클라이언트가 없으면 프레임 처리 생략
             if not active_connections:
-                print("⏸️ 모든 클라이언트가 연결 해제됨. 대기 중...")
+                print("⏸️ 모든 클라이언트가 연결 해제됨. 대기 중...", flush=True)
                 await asyncio.sleep(0.5)
                 continue
 
